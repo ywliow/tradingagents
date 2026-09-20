@@ -52,20 +52,50 @@ def get_global_news(curr_date, look_back_days: int = 7, limit: int = 50) -> dict
     return _make_api_request("NEWS_SENTIMENT", params)
 
 
-def get_insider_transactions(symbol: str) -> dict[str, str] | str:
-    """Returns latest and historical insider transactions by key stakeholders.
-
-    Covers transactions by founders, executives, board members, etc.
+def get_insider_transactions(symbol: str, curr_date: str = None, lookback_days: int = 30) -> str:
+    """Returns insider transactions filtered to the last `lookback_days` days.
 
     Args:
         symbol: Ticker symbol. Example: "IBM".
+        curr_date: Upper-bound date in yyyy-mm-dd; defaults to today.
+        lookback_days: Calendar days back from curr_date (default 30).
 
     Returns:
-        Dictionary containing insider transaction data or JSON string.
+        JSON-shaped dict (or its string form) limited to the window. Falls back
+        to raw response if filtering can't be applied.
     """
+    import json
+    from datetime import datetime, timedelta
 
-    params = {
-        "symbol": symbol,
-    }
+    raw = _make_api_request("INSIDER_TRANSACTIONS", {"symbol": symbol})
+    if isinstance(raw, str):
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return raw
+    else:
+        payload = raw
 
-    return _make_api_request("INSIDER_TRANSACTIONS", params)
+    rows = payload.get("data") if isinstance(payload, dict) else None
+    if not rows:
+        return json.dumps(payload) if isinstance(payload, dict) else str(payload)
+
+    end_dt = datetime.strptime(curr_date, "%Y-%m-%d") if curr_date else datetime.utcnow()
+    start_dt = end_dt - timedelta(days=lookback_days)
+
+    def _in_window(row):
+        d = row.get("transaction_date") or row.get("transactionDate") or ""
+        try:
+            dt = datetime.strptime(d[:10], "%Y-%m-%d")
+        except ValueError:
+            return False
+        return start_dt <= dt <= end_dt
+
+    filtered = [r for r in rows if _in_window(r)]
+    if not filtered:
+        return (
+            f"No insider transactions for {symbol.upper()} in the last "
+            f"{lookback_days} days ending {end_dt.strftime('%Y-%m-%d')}"
+        )
+
+    return json.dumps({"symbol": symbol.upper(), "window_days": lookback_days, "data": filtered})

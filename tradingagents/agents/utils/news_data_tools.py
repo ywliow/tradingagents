@@ -41,13 +41,19 @@ def get_global_news(
 @tool
 def get_insider_transactions(
     ticker: Annotated[str, "ticker symbol"],
+    curr_date: Annotated[str, "current trading date in yyyy-mm-dd; used as the upper bound for filtering"] = None,
+    lookback_days: Annotated[int, "how many calendar days back from curr_date to include"] = 30,
 ) -> str:
     """
-    Retrieve insider transaction information about a company.
-    Uses the configured news_data vendor.
+    Retrieve insider transactions for the last `lookback_days` calendar days.
+    Uses the configured news_data vendor. Default 30d — the swing-trade window
+    where insider clusters carry signal; older transactions are typically noise.
+
     Args:
         ticker (str): Ticker symbol of the company
+        curr_date (str): Current trading date, yyyy-mm-dd. Filter upper bound.
+        lookback_days (int): How many days back to include (default 30).
     Returns:
-        str: A report of insider transaction data
+        str: A report of insider transaction data filtered to the window
     """
-    return route_to_vendor("get_insider_transactions", ticker)
+    return route_to_vendor("get_insider_transactions", ticker, curr_date, lookback_days)

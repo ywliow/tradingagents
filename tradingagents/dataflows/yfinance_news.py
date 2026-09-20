@@ -1,10 +1,13 @@
 """yfinance-based news data fetching functions."""
 
+import logging
 import yfinance as yf
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 from .stockstats_utils import yf_retry
+
+logger = logging.getLogger(__name__)
 
 
 def _extract_article_data(article: dict) -> dict:
@@ -96,11 +99,14 @@ def get_news_yfinance(
             filtered_count += 1
 
         if filtered_count == 0:
+            logger.warning("Yahoo Finance news: no articles found for %s between %s and %s", ticker, start_date, end_date)
             return f"No news found for {ticker} between {start_date} and {end_date}"
 
+        logger.info("Yahoo Finance news fetch succeeded: %d articles for %s", filtered_count, ticker)
         return f"## {ticker} News, from {start_date} to {end_date}:\n\n{news_str}"
 
     except Exception as e:
+        logger.error("Yahoo Finance news fetch failed for %s: %s", ticker, e)
         return f"Error fetching news for {ticker}: {str(e)}"
 
 
@@ -191,7 +197,9 @@ def get_global_news_yfinance(
                 news_str += f"Link: {link}\n"
             news_str += "\n"
 
+        logger.info("Yahoo Finance global news fetch succeeded: %d articles", len(all_news[:limit]))
         return f"## Global Market News, from {start_date} to {curr_date}:\n\n{news_str}"
 
     except Exception as e:
+        logger.error("Yahoo Finance global news fetch failed: %s", e)
         return f"Error fetching global news: {str(e)}"

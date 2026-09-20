@@ -399,24 +399,43 @@ def get_income_statement(
 
 
 def get_insider_transactions(
-    ticker: Annotated[str, "ticker symbol of the company"]
+    ticker: Annotated[str, "ticker symbol of the company"],
+    curr_date: Annotated[str, "current date YYYY-MM-DD; upper bound for filter"] = None,
+    lookback_days: Annotated[int, "calendar days back from curr_date"] = 30,
 ):
-    """Get insider transactions data from yfinance."""
+    """Get insider transactions from yfinance, filtered to the lookback window."""
     try:
         ticker_obj = yf.Ticker(ticker.upper())
         data = yf_retry(lambda: ticker_obj.insider_transactions)
-        
+
         if data is None or data.empty:
             return f"No insider transactions data found for symbol '{ticker}'"
-            
-        # Convert to CSV string for consistency with other functions
+
+        # yfinance returns a 'Start Date' column with transaction dates
+        date_col = next(
+            (c for c in data.columns if "date" in c.lower()),
+            None,
+        )
+        if date_col is not None:
+            dates = pd.to_datetime(data[date_col], errors="coerce")
+            end_dt = pd.to_datetime(curr_date) if curr_date else pd.Timestamp.utcnow().tz_localize(None)
+            start_dt = end_dt - pd.Timedelta(days=lookback_days)
+            mask = (dates >= start_dt) & (dates <= end_dt)
+            data = data[mask]
+
+        if data.empty:
+            return (
+                f"No insider transactions for {ticker.upper()} in the "
+                f"last {lookback_days} days ending {curr_date or 'today'}"
+            )
+
         csv_string = data.to_csv()
-        
-        # Add header information
-        header = f"# Insider Transactions data for {ticker.upper()}\n"
-        header += f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-        
+        header = (
+            f"# Insider Transactions for {ticker.upper()} "
+            f"(last {lookback_days} days, ending {curr_date or 'today'})\n"
+            f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        )
         return header + csv_string
-        
+
     except Exception as e:
         return f"Error retrieving insider transactions for {ticker}: {str(e)}"

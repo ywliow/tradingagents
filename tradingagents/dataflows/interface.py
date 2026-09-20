@@ -11,6 +11,10 @@ from .y_finance import (
     get_insider_transactions as get_yfinance_insider_transactions,
 )
 from .yfinance_news import get_news_yfinance, get_global_news_yfinance
+from .yfinance_swing import (
+    get_earnings_calendar as get_yfinance_earnings_calendar,
+    get_relative_strength as get_yfinance_relative_strength,
+)
 from .alpha_vantage import (
     get_stock as get_alpha_vantage_stock,
     get_indicator as get_alpha_vantage_indicator,
@@ -22,7 +26,28 @@ from .alpha_vantage import (
     get_news as get_alpha_vantage_news,
     get_global_news as get_alpha_vantage_global_news,
 )
+from .alpha_vantage_swing import (
+    get_earnings_calendar as get_alpha_vantage_earnings_calendar,
+    get_relative_strength as get_alpha_vantage_relative_strength,
+)
 from .alpha_vantage_common import AlphaVantageRateLimitError
+from .tws import (
+    TWSConnectionError,
+    get_stock as get_tws_stock,
+    get_indicator as get_tws_indicator,
+    get_fundamentals as get_tws_fundamentals,
+    get_balance_sheet as get_tws_balance_sheet,
+    get_cashflow as get_tws_cashflow,
+    get_income_statement as get_tws_income_statement,
+    get_news as get_tws_news,
+    get_global_news as get_tws_global_news,
+    get_insider_transactions as get_tws_insider_transactions,
+)
+from .tws_swing import (
+    get_earnings_calendar as get_tws_earnings_calendar,
+    get_relative_strength as get_tws_relative_strength,
+    get_unusual_options_activity as get_tws_unusual_options_activity,
+)
 
 # Configuration and routing logic
 from .config import get_config
@@ -57,12 +82,21 @@ TOOLS_CATEGORIES = {
             "get_global_news",
             "get_insider_transactions",
         ]
+    },
+    "swing_signals": {
+        "description": "Swing-trading signals: earnings calendar, relative strength, options flow",
+        "tools": [
+            "get_earnings_calendar",
+            "get_relative_strength",
+            "get_unusual_options_activity",
+        ]
     }
 }
 
 VENDOR_LIST = [
     "yfinance",
     "alpha_vantage",
+    "tws",
 ]
 
 # Mapping of methods to their vendor-specific implementations
@@ -71,41 +105,64 @@ VENDOR_METHODS = {
     "get_stock_data": {
         "alpha_vantage": get_alpha_vantage_stock,
         "yfinance": get_YFin_data_online,
+        "tws": get_tws_stock,
     },
     # technical_indicators
     "get_indicators": {
         "alpha_vantage": get_alpha_vantage_indicator,
         "yfinance": get_stock_stats_indicators_window,
+        "tws": get_tws_indicator,
     },
     # fundamental_data
     "get_fundamentals": {
         "alpha_vantage": get_alpha_vantage_fundamentals,
         "yfinance": get_yfinance_fundamentals,
+        "tws": get_tws_fundamentals,
     },
     "get_balance_sheet": {
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "yfinance": get_yfinance_balance_sheet,
+        "tws": get_tws_balance_sheet,
     },
     "get_cashflow": {
         "alpha_vantage": get_alpha_vantage_cashflow,
         "yfinance": get_yfinance_cashflow,
+        "tws": get_tws_cashflow,
     },
     "get_income_statement": {
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
+        "tws": get_tws_income_statement,
     },
     # news_data
     "get_news": {
         "alpha_vantage": get_alpha_vantage_news,
         "yfinance": get_news_yfinance,
+        "tws": get_tws_news,
     },
     "get_global_news": {
         "yfinance": get_global_news_yfinance,
         "alpha_vantage": get_alpha_vantage_global_news,
+        "tws": get_tws_global_news,
     },
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
         "yfinance": get_yfinance_insider_transactions,
+        "tws": get_tws_insider_transactions,
+    },
+    # swing_signals
+    "get_earnings_calendar": {
+        "yfinance": get_yfinance_earnings_calendar,
+        "alpha_vantage": get_alpha_vantage_earnings_calendar,
+        "tws": get_tws_earnings_calendar,
+    },
+    "get_relative_strength": {
+        "yfinance": get_yfinance_relative_strength,
+        "alpha_vantage": get_alpha_vantage_relative_strength,
+        "tws": get_tws_relative_strength,
+    },
+    "get_unusual_options_activity": {
+        "tws": get_tws_unusual_options_activity,
     },
 }
 
@@ -156,7 +213,7 @@ def route_to_vendor(method: str, *args, **kwargs):
 
         try:
             return impl_func(*args, **kwargs)
-        except AlphaVantageRateLimitError:
-            continue  # Only rate limits trigger fallback
+        except (AlphaVantageRateLimitError, TWSConnectionError):
+            continue  # rate limit or exhausted TWS retries → try next vendor
 
     raise RuntimeError(f"No available vendor for '{method}'")

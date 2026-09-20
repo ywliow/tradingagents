@@ -1,5 +1,6 @@
 from typing import Optional
 import datetime
+import logging
 import typer
 from pathlib import Path
 from functools import wraps
@@ -636,7 +637,41 @@ def get_analysis_date():
             )
 
 
-def save_report_to_disk(final_state, ticker: str, save_path: Path):
+class _AppLogBuffer(logging.Handler):
+    """Captures log records from data-source loggers during a run for later disk writes."""
+
+    _SOURCE_MAP = {
+        "tradingagents.dataflows.tws_common": "tws",
+        "tradingagents.dataflows.tws_stock": "tws",
+        "tradingagents.dataflows.tws_indicator": "tws",
+        "tradingagents.dataflows.tws_news": "tws",
+        "tradingagents.dataflows.tws_fundamentals": "tws",
+        "tradingagents.dataflows.alpha_vantage_common": "alphavantage",
+        "tradingagents.dataflows.stockstats_utils": "yfinance",
+        "tradingagents.dataflows.yfinance_news": "yfinance",
+    }
+    _FMT = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+
+    def __init__(self):
+        super().__init__(logging.DEBUG)
+        self._records: dict[str, list[logging.LogRecord]] = {
+            "tws": [], "alphavantage": [], "yfinance": []
+        }
+
+    def emit(self, record: logging.LogRecord) -> None:
+        dest = self._SOURCE_MAP.get(record.name)
+        if dest:
+            self._records[dest].append(record)
+
+    def flush_to_dir(self, applog_dir: Path) -> None:
+        applog_dir.mkdir(exist_ok=True)
+        for name, records in self._records.items():
+            with open(applog_dir / f"{name}.log", "w", encoding="utf-8") as f:
+                for r in records:
+                    f.write(self._FMT.format(r) + "\n")
+
+
+def save_report_to_disk(final_state, ticker: str, save_path: Path, applog_buffer: "_AppLogBuffer | None" = None):
     """Save complete analysis report to disk with organized subfolders."""
     save_path.mkdir(parents=True, exist_ok=True)
     sections = []
@@ -719,6 +754,10 @@ def save_report_to_disk(final_state, ticker: str, save_path: Path):
             portfolio_dir.mkdir(exist_ok=True)
             (portfolio_dir / "decision.md").write_text(risk["judge_decision"], encoding="utf-8")
             sections.append(f"## V. Portfolio Manager Decision\n\n### Portfolio Manager\n{risk['judge_decision']}")
+
+    # 88. App Logs
+    if applog_buffer is not None:
+        applog_buffer.flush_to_dir(save_path / "88_applog")
 
     # Write consolidated report
     header = f"# Trading Analysis Report: {ticker}\n\nGenerated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
@@ -974,6 +1013,14 @@ def run_analysis(checkpoint: bool = False):
     log_file = results_dir / "message_tool.log"
     log_file.touch(exist_ok=True)
 
+    # Set up app-log buffer to capture TWS / Alpha Vantage / yfinance events
+    applog_buffer = _AppLogBuffer()
+    for _logger_name in _AppLogBuffer._SOURCE_MAP:
+        _src_logger = logging.getLogger(_logger_name)
+        _src_logger.addHandler(applog_buffer)
+        if _src_logger.level == logging.NOTSET or _src_logger.level > logging.DEBUG:
+            _src_logger.setLevel(logging.DEBUG)
+
     def save_message_decorator(obj, func_name):
         func = getattr(obj, func_name)
         @wraps(func)
@@ -1185,7 +1232,7 @@ def run_analysis(checkpoint: bool = False):
         ).strip()
         save_path = Path(save_path_str)
         try:
-            report_file = save_report_to_disk(final_state, selections["ticker"], save_path)
+            report_file = save_report_to_disk(final_state, selections["ticker"], save_path, applog_buffer=applog_buffer)
             console.print(f"\n[green]✓ Report saved to:[/green] {save_path.resolve()}")
             console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
         except Exception as e:
@@ -1195,6 +1242,10 @@ def run_analysis(checkpoint: bool = False):
     display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
     if display_choice in ("Y", "YES", ""):
         display_complete_report(final_state)
+
+    # Clean up app-log handlers to avoid duplication on re-entry
+    for _logger_name in _AppLogBuffer._SOURCE_MAP:
+        logging.getLogger(_logger_name).removeHandler(applog_buffer)
 
 
 @app.command()

@@ -7,7 +7,7 @@ def get_indicators(
     symbol: Annotated[str, "ticker symbol of the company"],
     indicator: Annotated[str, "technical indicator to get the analysis and report of"],
     curr_date: Annotated[str, "The current trading date you are trading on, YYYY-mm-dd"],
-    look_back_days: Annotated[int, "how many days to look back"] = 30,
+    look_back_days: Annotated[int, "how many calendar days to look back"] = 120,
 ) -> str:
     """
     Retrieve a single technical indicator for a given ticker symbol.
@@ -16,7 +16,7 @@ def get_indicators(
         symbol (str): Ticker symbol of the company, e.g. AAPL, TSM
         indicator (str): A single technical indicator name, e.g. 'rsi', 'macd'. Call this tool once per indicator.
         curr_date (str): The current trading date you are trading on, YYYY-mm-dd
-        look_back_days (int): How many days to look back, default is 30
+        look_back_days (int): How many calendar days to look back, default 120 (~3 months — enough trend regime context for 1–3 week swing trades)
     Returns:
         str: A formatted dataframe containing the technical indicators for the specified ticker symbol and indicator.
     """

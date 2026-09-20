@@ -1,3 +1,4 @@
+import logging
 import os
 import requests
 import pandas as pd
@@ -6,6 +7,8 @@ from datetime import datetime
 from io import StringIO
 
 API_BASE_URL = "https://www.alphavantage.co/query"
+
+logger = logging.getLogger(__name__)
 
 def get_api_key() -> str:
     """Retrieve the API key for Alpha Vantage from environment variables."""
@@ -63,11 +66,15 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
         # Remove entitlement if it's None or empty
         api_params.pop("entitlement", None)
     
-    response = requests.get(API_BASE_URL, params=api_params)
-    response.raise_for_status()
+    try:
+        response = requests.get(API_BASE_URL, params=api_params)
+        response.raise_for_status()
+    except requests.HTTPError as e:
+        logger.error("Alpha Vantage HTTP error for %s: %s", function_name, e)
+        raise
 
     response_text = response.text
-    
+
     # Check if response is JSON (error responses are typically JSON)
     try:
         response_json = json.loads(response_text)
@@ -75,11 +82,13 @@ def _make_api_request(function_name: str, params: dict) -> dict | str:
         if "Information" in response_json:
             info_message = response_json["Information"]
             if "rate limit" in info_message.lower() or "api key" in info_message.lower():
+                logger.error("Alpha Vantage rate limit exceeded for %s: %s", function_name, info_message)
                 raise AlphaVantageRateLimitError(f"Alpha Vantage rate limit exceeded: {info_message}")
     except json.JSONDecodeError:
         # Response is not JSON (likely CSV data), which is normal
         pass
 
+    logger.info("Alpha Vantage API call succeeded: %s", function_name)
     return response_text
 
 

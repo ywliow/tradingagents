@@ -217,3 +217,5 @@ __marimo__/
 
 # Cache
 **/data_cache/
+Miniconda3-latest-MacOSX-arm64.sh
+*.sh

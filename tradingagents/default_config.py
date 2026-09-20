@@ -36,12 +36,17 @@ DEFAULT_CONFIG = {
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
     # Data vendor configuration
-    # Category-level configuration (default for all tools in category)
+    # Category-level configuration (default for all tools in category).
+    # Comma-separated lists define the priority/fallback order.
+    # TWS requires a running TWS or IB Gateway; it retries 5× before falling back.
+    # Fundamentals and news via TWS require active Reuters/Refinitiv and news subscriptions.
     "data_vendors": {
-        "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance
-        "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance
-        "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance
-        "news_data": "yfinance",             # Options: alpha_vantage, yfinance
+        "core_stock_apis": "tws,yfinance,alpha_vantage",       # Options: tws, yfinance, alpha_vantage
+        "technical_indicators": "tws,yfinance,alpha_vantage",  # Options: tws, yfinance, alpha_vantage
+        "fundamental_data": "tws,yfinance,alpha_vantage",      # Options: tws, yfinance, alpha_vantage
+        "news_data": "tws,yfinance,alpha_vantage",             # Options: tws, yfinance, alpha_vantage
+        "swing_signals": "tws,yfinance,alpha_vantage",         # Earnings calendar, relative strength, options flow.
+                                                                # Options flow is TWS-only; falls through silently otherwise.
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {
